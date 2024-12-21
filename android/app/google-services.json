@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "361541283071",
+    "project_id": "car-services-a23df",
+    "storage_bucket": "car-services-a23df.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:361541283071:android:27e17dc3b9fe963cb470ca",
+        "android_client_info": {
+          "package_name": "com.example.flutter_car_service"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKm7vqjERLrC8uIkuaUNiYvBNsX94j0v8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

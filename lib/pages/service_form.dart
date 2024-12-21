@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_car_service/models/service_models.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../data/service.dart';
 import '../style/color.dart';
+import 'home_pages.dart';
+import 'receipt_page.dart';
+import 'previous_receipts_page.dart'; // Added import
 
 class ServiceFormPage extends StatefulWidget {
   const ServiceFormPage({super.key});
@@ -14,8 +18,16 @@ class ServiceFormPage extends StatefulWidget {
 
 class _ServiceFormPageState extends State<ServiceFormPage> {
   List<ServiceModels> serviceDataForm = [];
-
   List<ServiceModels> selectedService = [];
+
+  TextEditingController carNameController = TextEditingController();
+  TextEditingController carPlateController = TextEditingController();
+  TextEditingController userNameController = TextEditingController();
+
+  DateTime? selectedDate;
+
+  // Firestore reference
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
@@ -24,416 +36,303 @@ class _ServiceFormPageState extends State<ServiceFormPage> {
   }
 
   @override
+  void dispose() {
+    carNameController.dispose();
+    carPlateController.dispose();
+    userNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveDataToFirestore() async {
+    try {
+      await _firestore.collection('serviceForms').add({
+        'carName': carNameController.text,
+        'carPlate': carPlateController.text,
+        'userName': userNameController.text,
+        'serviceDate': selectedDate?.toIso8601String(),
+        'selectedServices':
+            selectedService.map((service) => service.logo).toList(),
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Form submitted successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save data: $e')),
+      );
+    }
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
+    DateTime initialDate = selectedDate ?? DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null && picked != selectedDate) {
+      setState(() {
+        selectedDate = picked;
+      });
+    }
+  }
+
+  bool _areFieldsValid() {
+    if (carNameController.text.isEmpty ||
+        carPlateController.text.isEmpty ||
+        userNameController.text.isEmpty ||
+        selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all fields and select a service date.'),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  void _submitForm() async {
+    if (!_areFieldsValid()) return;
+
+    await _saveDataToFirestore();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReceiptPage(
+          userName: userNameController.text,
+          carName: carNameController.text,
+          carPlate: carPlateController.text,
+          serviceDate: selectedDate!,
+          selectedServices: selectedService
+              .map((service) => service.logo ?? "Unknown Service")
+              .toList(),
+        ),
+      ),
+    );
+  }
+
+  void _viewPreviousReceipts() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PreviousReceiptsPage(), // Navigates to previous receipts page
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: bgColor,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: blackAccent,
-          ),
-          title: Text(
-            "Service Form",
-            style: GoogleFonts.poppins(
-                color: blackAccent, fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          actions: [SizedBox()],
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: blackAccent),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => HomePage()),
+            );
+          },
         ),
-        body: Padding(
-          padding: EdgeInsets.all(10),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(20),
-                  margin: EdgeInsets.only(left: 10, right: 10),
+        title: Text(
+          "Service Form",
+          style: GoogleFonts.poppins(
+              color: blackAccent, fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(10),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Car Details Section
+              _buildCarDetailsSection(),
+              const SizedBox(height: 25),
+              // Service List Section
+              _buildServiceListSection(),
+              const SizedBox(height: 25),
+              // Date Picker Section
+              _buildDatePickerSection(),
+              const SizedBox(height: 25),
+              // Buttons Section
+              _buildButtonsSection(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCarDetailsSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(left: 10, right: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: subText.withOpacity(0.1),
+            spreadRadius: 5,
+            blurRadius: 7,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Car Detail",
+            style: GoogleFonts.poppins(
+                color: blackAccent, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 5),
+          _buildInputField("Car Name", carNameController),
+          _buildInputField("Car Number", carPlateController),
+          _buildInputField("Your Name", userNameController),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceListSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Service List",
+          style: GoogleFonts.poppins(
+              color: subText, fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 15),
+        SizedBox(
+          height: 80,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: serviceDataForm.length,
+            itemBuilder: (context, index) {
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    selectedService.add(serviceDataForm[index]);
+                    serviceDataForm.removeAt(index);
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: subText.withOpacity(0.1),
-                        spreadRadius: 5,
-                        blurRadius: 7,
-                        offset:
-                            const Offset(0, 3), // changes position of shadow
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Car Detail",
-                        style: GoogleFonts.poppins(
-                            color: blackAccent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
-                      ),
-                      SizedBox(
-                        height: 5,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Car Name",
-                            style: GoogleFonts.poppins(
-                                color: subText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500),
-                          ),
-                          Text(
-                            "Avanza",
-                            style: GoogleFonts.poppins(
-                                color: blackAccent,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                          )
-                        ],
-                      ),
-                      SizedBox(
-                        height: 5,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Car Number",
-                            style: GoogleFonts.poppins(
-                                color: subText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500),
-                          ),
-                          Text(
-                            "AB 2554 GH",
-                            style: GoogleFonts.poppins(
-                                color: blackAccent,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                          )
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  height: 25,
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(10.0),
-                  child: Text(
-                    "Service List",
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                        color: subText,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ),
-                SizedBox(
-                  height: 15,
-                ),
-                SizedBox(
-                  height: 80,
-                  child: ListView.builder(
-                      shrinkWrap: true,
-                      scrollDirection: Axis.horizontal,
-                      itemCount: serviceDataForm.length == 0
-                          ? 1
-                          : serviceDataForm.length,
-                      itemBuilder: ((context, index) {
-                        return serviceDataForm.isEmpty
-                            ? Container(
-                                margin: EdgeInsets.only(left: 10, right: 10),
-                                child: Center(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.check_rounded,
-                                        color: mainColor,
-                                        size: 40,
-                                      ),
-                                      Text(
-                                        "All Service have been Picked",
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.poppins(
-                                            color: mainColor,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              )
-                            : InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    selectedService.add(ServiceModels(
-                                        id: serviceDataForm[index].id,
-                                        logo: serviceDataForm[index].logo));
-                                    serviceDataForm.removeAt(index);
-                                  });
-                                },
-                                child: Container(
-                                  padding: EdgeInsets.all(20),
-                                  margin: EdgeInsets.only(left: 10, right: 10),
-                                  decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      color: mainColor),
-                                  child: Image.asset(
-                                    serviceDataForm[index].logo.toString(),
-                                    height: 20,
-                                    width: 40,
-                                  ),
-                                ),
-                              );
-                      })),
-                ),
-                SizedBox(
-                  height: 25,
-                ),
-                Container(
-                  margin: EdgeInsets.only(left: 10, right: 10),
-                  child: Text(
-                    "Selected Service ",
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                        color: subText,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ),
-                SizedBox(
-                  height: 15,
-                ),
-                SizedBox(
-                  height: 80,
-                  child: ListView.builder(
-                      shrinkWrap: true,
-                      scrollDirection: Axis.horizontal,
-                      itemCount: selectedService.length == 0
-                          ? 1
-                          : selectedService.length,
-                      itemBuilder: ((context, index) {
-                        return selectedService.isEmpty
-                            ? Container(
-                                margin: EdgeInsets.only(left: 10, right: 10),
-                                child: Center(
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.close,
-                                        color: mainColor,
-                                        size: 40,
-                                      ),
-                                      Text(
-                                        "No Service has Picked",
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.poppins(
-                                            color: mainColor,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              )
-                            : InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    serviceDataForm.add(ServiceModels(
-                                        id: selectedService[index].id,
-                                        logo: selectedService[index].logo));
-                                    selectedService.removeAt(index);
-                                  });
-                                },
-                                child: Container(
-                                  padding: EdgeInsets.all(20),
-                                  margin: EdgeInsets.only(left: 10, right: 10),
-                                  decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      color: mainColor),
-                                  child: Image.asset(
-                                    selectedService[index].logo.toString(),
-                                    height: 20,
-                                    width: 40,
-                                  ),
-                                ),
-                              );
-                      })),
-                ),
-                SizedBox(
-                  height: 15,
-                ),
-                Container(
-                  margin: EdgeInsets.only(left: 10, right: 10),
-                  width: double.infinity,
-                  padding: EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: subText.withOpacity(0.1),
-                        spreadRadius: 5,
-                        blurRadius: 7,
-                        offset:
-                            const Offset(0, 3), // changes position of shadow
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Service Details",
-                        style: GoogleFonts.poppins(
-                            color: blackAccent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
-                      ),
-                      SizedBox(
-                        height: 5,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Service Date",
-                            style: GoogleFonts.poppins(
-                                color: subText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500),
-                          ),
-                          Row(children: [
-                            Text(
-                              "15 Okt 2022",
-                              style: GoogleFonts.poppins(
-                                  color: blackAccent,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            SizedBox(
-                              width: 5,
-                            ),
-                            Icon(
-                              Icons.today,
-                              color: mainColor,
-                            )
-                          ])
-                        ],
-                      ),
-                      SizedBox(
-                        height: 5,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Service Type",
-                            style: GoogleFonts.poppins(
-                                color: subText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500),
-                          ),
-                          Text(
-                            "Service Routines",
-                            style: GoogleFonts.poppins(
-                                color: blackAccent,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                          )
-                        ],
-                      ),
-                      SizedBox(
-                        height: 5,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Estimate Time",
-                            style: GoogleFonts.poppins(
-                                color: subText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500),
-                          ),
-                          Text(
-                            "4H 25M",
-                            style: GoogleFonts.poppins(
-                                color: blackAccent,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                          )
-                        ],
-                      ),
-                      SizedBox(
-                        height: 5,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Tasks Executor",
-                            style: GoogleFonts.poppins(
-                                color: subText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500),
-                          ),
-                          Text(
-                            "John Donny",
-                            style: GoogleFonts.poppins(
-                                color: blackAccent,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                          )
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  height: 35,
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(10.0),
-                  child: Material(
                     color: mainColor,
-                    borderRadius: BorderRadius.circular(15),
-                    child: InkWell(
-                      splashColor: subText,
-                      borderRadius: BorderRadius.circular(15),
-                      onTap: () {},
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(15)),
-                        child: Text(
-                          "SUBMIT FORM",
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
+                  ),
+                  child: Image.asset(
+                    serviceDataForm[index].logo.toString(),
+                    height: 40,
+                    width: 40,
                   ),
                 ),
-                SizedBox(
-                  height: 15,
-                ),
-              ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDatePickerSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Service Date",
+          style: GoogleFonts.poppins(
+              color: blackAccent, fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            Text(
+              selectedDate == null
+                  ? 'Select a date'
+                  : "${selectedDate?.day}/${selectedDate?.month}/${selectedDate?.year}",
+              style: GoogleFonts.poppins(fontSize: 14),
+            ),
+            IconButton(
+              icon: Icon(Icons.calendar_today, color: mainColor),
+              onPressed: () => _pickDate(context),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildButtonsSection() {
+    return Center(
+      child: Column(
+        children: [
+          ElevatedButton(
+            onPressed: _submitForm,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: mainColor,
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+            ),
+            child: Text(
+              "Submit Form",
+              style: GoogleFonts.poppins(
+                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
-        ));
+          const SizedBox(height: 15),
+          ElevatedButton(
+            onPressed: _viewPreviousReceipts,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+            ),
+            child: Text(
+              "View Previous Receipts",
+              style: GoogleFonts.poppins(
+                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputField(String label, TextEditingController controller) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+              color: subText, fontSize: 12, fontWeight: FontWeight.w500),
+        ),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              hintText: "   Enter $label",
+              hintStyle: GoogleFonts.poppins(
+                  color: blackAccent, fontSize: 12, fontWeight: FontWeight.w600),
+              border: const UnderlineInputBorder(),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

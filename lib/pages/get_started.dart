@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_car_service/component/bottom_nav.dart';
+// import 'package:flutter_car_service/component/bottom_nav.dart';
+import 'login_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../style/color.dart';
 
@@ -60,6 +61,7 @@ class _GetStartedState extends State<GetStarted> {
                       )
                     ],
                   ),
+
                   Material(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
@@ -68,9 +70,9 @@ class _GetStartedState extends State<GetStarted> {
                       borderRadius: BorderRadius.circular(15),
                       onTap: () {
                         Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: ((context) => BottomNav())));
+                          context,
+                          MaterialPageRoute(builder: (context) => LoginPage()),
+                        );
                       },
                       child: Container(
                         width: double.infinity,
